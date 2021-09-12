@@ -28,6 +28,3 @@ jobs:
 
     - name: MyPy
       run: mypy .
-
-    - name: Tests
-      run: python ./tests/test_data_consistency.py
