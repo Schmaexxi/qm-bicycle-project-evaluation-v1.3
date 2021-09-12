@@ -38,6 +38,7 @@ with open("data/anonymized_project.json", "r+") as f:
     data: dict = json.load(f)
 result_set: dict = data['results']['root_node']['results']
 
+# keys for dictionary access; tuple-elements at index > 0 are keys for nested dicts
 column_names: List = [
     ('created_at',),
     ('workpackage_total_size',),
@@ -64,29 +65,25 @@ column_names: List = [
         'vendor_user_id',
     ),
 ]
-selected_data: List = []
 
-#  iterate task results
-for task_pseudo, task_stats in result_set.items():
-    # print(annotator, task_list)
-    #  iterate list of annotators for this task
-    for annotation in task_stats['results']:
+selected_data: List = []  # nested list for dataframe
+for question, task_stats in result_set.items():  # iterate task results
+    for annotation in task_stats['results']:  # iterate list of annotators for this task
 
-        annotation_stats: List = []
-
-        # index.append([annotation['user']['vendor_id'], annotation['user']['vendor_user_id']])
-
+        annotation_stats: List = []  # row information
         for c_name in column_names:
-            if len(c_name) > 1:
+            if len(c_name) > 1:  # nested dict
                 annotation_stats.extend([annotation[c_name[0]][c_name[1]]])
             else:
                 annotation_stats.extend([annotation[c_name[0]]])
-        annotation_stats.append(task_pseudo)  # add task _pseudonym
+        annotation_stats.append(question)  # add the pseudomized question as last element
         selected_data.append(annotation_stats)
 
-column_names.append(('task_pseudonym',))
+column_names.append(('question',))  # also add a last element for column names
+# create reasonable headers for a data frame
 col_names: List = [c_name[0] if len(c_name) == 1 else f"{c_name[0]}_{c_name[1]}" for c_name in column_names]
 annotator_df: pd.DataFrame = pd.DataFrame(selected_data, columns=col_names)
+# cast the numeric part of the annotators to integers, since an integer index is easier to work with
 annotator_df['user_id'] = [int(user.rsplit('_')[-1]) for user in annotator_df['user_vendor_user_id']]
 annotator_df = annotator_df.set_index('user_id')
 annotator_df.sort_index(inplace=True)
@@ -98,12 +95,12 @@ dur_min: int = annotator_df['task_output_duration_ms'].min()  # minimum annotati
 dur_mean: int = annotator_df['task_output_duration_ms'].mean()  # average annotation duration
 plot_annotation_times(annotator_df)
 
-curated_df: pd.DataFrame = annotator_df[(annotator_df['task_output_duration_ms'] > 0)]
+curated_df: pd.DataFrame = annotator_df[(annotator_df['task_output_duration_ms'] > 0)]  # remove negative outlier
 plot_annotation_times(
     curated_df, title='Annotation duration times without negatives', f_name='annotation_duration_without_negatives'
 )
 
-curated_df = annotator_df[(annotator_df['task_output_duration_ms'] > 250)]
+curated_df = annotator_df[(annotator_df['task_output_duration_ms'] > 250)]  # adjust acceptable time to answer
 plot_annotation_times(
     curated_df,
     title='Annotation duration times below average reaction time',
@@ -114,6 +111,7 @@ plot_annotation_times(
 annotator_result_count: dict = {
     index: len(annotator_df.loc[index]) for index in set(list(annotator_df.index.get_level_values(0)))
 }
+
 fig = plt.figure(figsize=(6, 3), dpi=150)
 plt.bar(annotator_result_count.keys(), annotator_result_count.values(), color='#a1ccf4')
 plt.title('Annotations by annotator')
@@ -121,7 +119,7 @@ plt.xlabel('Annotator')
 plt.ylabel('Number of annotations')
 fig.savefig(Path.cwd() / 'plots/annotator_results.png')
 
-answer_counts_by_question: pandas.Series = annotator_df.groupby('task_pseudonym')['task_output_answer'].value_counts()
+answer_counts_by_question: pandas.Series = annotator_df.groupby('question')['task_output_answer'].value_counts()
 
 controversial_questions: List = []
 for index, count in answer_counts_by_question.items():
