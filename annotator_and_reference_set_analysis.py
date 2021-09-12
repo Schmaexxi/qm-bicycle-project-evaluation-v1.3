@@ -38,6 +38,8 @@ with open("data/anonymized_project.json", "r+") as f:
     data: dict = json.load(f)
 result_set: dict = data['results']['root_node']['results']
 
+task_results: dict = {}
+
 # keys for dictionary access; tuple-elements at index > 0 are keys for nested dicts
 column_names: List = [
     ('created_at',),
@@ -90,9 +92,9 @@ annotator_df.sort_index(inplace=True)
 
 annotator_count: int = len(set(list(annotator_df.index.get_level_values(0))))  # number of distinct annotators
 
-dur_max: int = annotator_df['task_output_duration_ms'].max()  # maximum annotation duration
-dur_min: int = annotator_df['task_output_duration_ms'].min()  # minimum annotation duration
-dur_mean: int = annotator_df['task_output_duration_ms'].mean()  # average annotation duration
+task_results['max_annotation_duration'] = annotator_df['task_output_duration_ms'].max()  # maximum annotation duration
+task_results['min_annotation_duration'] = annotator_df['task_output_duration_ms'].min()  # minimum annotation duration
+task_results['mean_annotation_duration'] = annotator_df['task_output_duration_ms'].mean()  # average annotation duration
 plot_annotation_times(annotator_df)
 
 curated_df: pd.DataFrame = annotator_df[(annotator_df['task_output_duration_ms'] > 0)]  # remove negative outlier
@@ -108,12 +110,13 @@ plot_annotation_times(
 )
 
 # respective number of results produced by individual annotators
-annotator_result_count: dict = {
+task_results['annotator_result_count'] = {
     index: len(annotator_df.loc[index]) for index in set(list(annotator_df.index.get_level_values(0)))
 }
 
+
 fig = plt.figure(figsize=(6, 3), dpi=150)
-plt.bar(annotator_result_count.keys(), annotator_result_count.values(), color='#a1ccf4')
+plt.bar(task_results['annotator_result_count'].keys(), task_results['annotator_result_count'].values(), color='#a1ccf4')
 plt.title('Annotations by annotator')
 plt.xlabel('Annotator')
 plt.ylabel('Number of annotations')
@@ -128,4 +131,13 @@ for index, count in answer_counts_by_question.items():
         if index[0] not in controversial_questions:
             controversial_questions.append(index[0])
 
-print(len(controversial_questions))
+task_results['controversial_questions'] = controversial_questions
+
+# number of responses of 'cant_solve' and 'corrupt_data' respectively
+task_results['cant_solve_count'] = len(annotator_df[(annotator_df['task_output_cant_solve'] == 1)])
+task_results['corrupt_data_count'] = len(annotator_df[(annotator_df['task_output_corrupt_data'] == 1)])
+
+# dataframe for trend_analysis
+unsolvable_and_corrupted_df: pd.DataFrame = annotator_df[
+    (annotator_df['task_output_corrupt_data'] == 1) | (annotator_df['task_output_cant_solve'] == 1)
+]
