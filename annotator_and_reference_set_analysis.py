@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker as ticker  # type: ignore
 from pathlib import Path
 
+PLOT_PATH: Path = Path.cwd() / 'plots'
+DATA_PATH: Path = Path.cwd() / 'data'
+PLOT_PATH.mkdir(exist_ok=True, parents=True)
+DATA_PATH.mkdir(exist_ok=True, parents=True)
+
 
 def plot_annotation_times(
     df: pd.DataFrame, title: str = 'Annotation duration times', f_name: str = 'annotation_duration'
@@ -30,11 +35,17 @@ def plot_annotation_times(
     ax2.set_xlabel('Annotator')
     ax2.set_ylabel('Time in ms')
     ax2.tick_params(axis='x', labelsize=8)
-    (Path.cwd() / 'plots').mkdir(parents=True, exist_ok=True)
-    fig.savefig(Path.cwd() / f'plots/{f_name}.png')
+    fig.savefig(PLOT_PATH / f'{f_name}.png')
 
 
-with open("data/anonymized_project.json", "r+") as f:
+def percentage(part: float, whole: float) -> float:
+    """
+    Helper function to calculate percentages
+    """
+    return part * 100 / whole
+
+
+with open(DATA_PATH / 'anonymized_project.json', 'r') as f:
     data: dict = json.load(f)
 result_set: dict = data['results']['root_node']['results']
 
@@ -42,6 +53,7 @@ task_results: dict = {}
 
 # keys for dictionary access; tuple-elements at index > 0 are keys for nested dicts
 column_names: List = [
+    ('task_input', 'image_url'),
     ('created_at',),
     ('workpackage_total_size',),
     ('loss',),
@@ -87,7 +99,7 @@ col_names: List = [c_name[0] if len(c_name) == 1 else f"{c_name[0]}_{c_name[1]}"
 annotator_df: pd.DataFrame = pd.DataFrame(selected_data, columns=col_names)
 # cast the numeric part of the annotators to integers, since an integer index is easier to work with
 annotator_df['user_id'] = [int(user.rsplit('_')[-1]) for user in annotator_df['user_vendor_user_id']]
-annotator_df = annotator_df.set_index('user_id')
+annotator_df.set_index('user_id', inplace=True)
 annotator_df.sort_index(inplace=True)
 
 annotator_count: int = len(set(list(annotator_df.index.get_level_values(0))))  # number of distinct annotators
@@ -115,12 +127,14 @@ task_results['annotator_result_count'] = {
 }
 
 
-fig = plt.figure(figsize=(6, 3), dpi=150)
+fig = plt.figure(figsize=(8, 6), dpi=300)
 plt.bar(task_results['annotator_result_count'].keys(), task_results['annotator_result_count'].values(), color='#a1ccf4')
+current_axes = plt.gca()
+current_axes.axes.get_xaxis().set_major_locator(ticker.MultipleLocator(1))  # show every annotator on the x-axis
 plt.title('Annotations by annotator')
 plt.xlabel('Annotator')
 plt.ylabel('Number of annotations')
-fig.savefig(Path.cwd() / 'plots/annotator_results.png')
+fig.savefig(PLOT_PATH / 'annotator_results.png')
 
 answer_counts_by_question: pandas.Series = annotator_df.groupby('question')['task_output_answer'].value_counts()
 
@@ -133,6 +147,7 @@ for index, count in answer_counts_by_question.items():
 
 task_results['controversial_questions'] = controversial_questions
 
+# task 2
 # number of responses of 'cant_solve' and 'corrupt_data' respectively
 task_results['cant_solve_count'] = len(annotator_df[(annotator_df['task_output_cant_solve'] == 1)])
 task_results['corrupt_data_count'] = len(annotator_df[(annotator_df['task_output_corrupt_data'] == 1)])
@@ -141,3 +156,31 @@ task_results['corrupt_data_count'] = len(annotator_df[(annotator_df['task_output
 unsolvable_and_corrupted_df: pd.DataFrame = annotator_df[
     (annotator_df['task_output_corrupt_data'] == 1) | (annotator_df['task_output_cant_solve'] == 1)
 ]
+
+
+# task 3
+with open(DATA_PATH / 'references.json', 'r') as f:
+    references_set = json.load(f)
+
+# new data frame for validation reference
+references_df: pd.DataFrame = pd.DataFrame(
+    [[img, validation['is_bicycle']] for img, validation in references_set.items()], columns=['image', 'validation']
+)
+
+images_count: int = len(references_df)  # row_count
+images_with_bicycles_count: int = references_df['validation'].value_counts()[
+    True
+]  # images on which a bicycle can be seen
+images_without_bicycles_count: int = images_count - images_with_bicycles_count  # images on which no bicycle can be seen
+
+task_results['reference_set'] = {}
+task_results['reference_set']['images_with_bicycle'] = images_with_bicycles_count
+task_results['reference_set']['images_without_bicycle'] = images_without_bicycles_count
+
+# plot balance of reference set
+labels = [f'is bicycle ({images_with_bicycles_count})', f'is not bicycle ({images_without_bicycles_count})']
+sizes = [percentage(images_with_bicycles_count, images_count), percentage(images_without_bicycles_count, images_count)]
+fig, ax = plt.subplots()
+ax.pie(sizes, labels=labels, explode=(0.05, 0), shadow=True, autopct='%1.2f%%', startangle=90)
+plt.title('Ground truth distribution')
+fig.savefig(PLOT_PATH / 'references_distribution.png')
