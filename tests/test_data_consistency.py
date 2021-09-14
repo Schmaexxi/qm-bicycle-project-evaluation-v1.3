@@ -39,7 +39,7 @@ class TestFileStructure(unittest.TestCase):
             for task in task_list['results']:
                 for key, val in task.items():
                     # check the keys in every task
-                    self.assertEqual([key for key in task.keys()], fields['base'])
+                    self.assertEqual([key for key in task.keys()], fields['base'], "Keys do not match")
                     if isinstance(val, dict):  # for keys of nested dicts
                         self.assertEqual(
                             [key for key in val.keys()], fields[key], "Keys of nested json field do not match"
@@ -54,7 +54,9 @@ class TestFileStructure(unittest.TestCase):
 
         for _, results in self.result_set.items():
             self.assertEqual(
-                results['gui_type'], arbitrary_first_gui_type, f"{results['gui_type']} != {arbitrary_first_gui_type}"
+                results['gui_type'],
+                arbitrary_first_gui_type,
+                f"{results['gui_type']} != {arbitrary_first_gui_type}",
             )
 
     def test_id_user_relation(self) -> None:
@@ -77,7 +79,10 @@ class TestFileStructure(unittest.TestCase):
         # combination of 'id' and 'vendor_user_id'
         users_and_ids_count_df: pd.DataFrame = users_and_ids_df.groupby(['id', 'vendor_user_id']).count()
         # is the combination between 'id' and 'vendor_user_id' unique?
-        self.assertTrue(len(users_and_ids_count_df) == len(individual_users))
+        self.assertTrue(
+            len(users_and_ids_count_df) == len(individual_users),
+            "Non-unique mapping exists between 'id' and 'vendor_user_id'",
+        )
 
 
 if __name__ == '__main__':
