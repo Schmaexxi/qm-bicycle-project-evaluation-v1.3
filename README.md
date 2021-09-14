@@ -31,7 +31,14 @@ conda activate bicycle_project_eval
 ## 3. File structure
 There exist two scripts:
 
-One for testing at ./tests/test_data_consistency.py
+One for testing at
+```
+./tests/test_data_consistency.py
+```
 
-The other for the specified evaluation at ./annotator_and_reference_set_analysis.py
+The other for the specified evaluation at
+```
+./annotator_and_reference_set_analysis.py
+```
 
+The dictionary 'task_results' in the latter script holds most relevant task-related information
