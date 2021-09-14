@@ -13,7 +13,7 @@ Navigate into the cloned repo and create a directory labeled 'data', which shoul
 
 
 ### Dependencies
-Make sure to run Python3.9 to be able to replicate this setup effortlessly.
+Make sure to run Python3.9 to be able to replicate this setup effortlessly. Feel free to choose whichever manager you like to install the packages.
 #### Pip
 ```
 python -m venv bicycle_project_eval

@@ -133,8 +133,8 @@ plot_annotation_times(
 curated_df = annotator_df[(annotator_df['task_output_duration_ms'] > 250)]  # adjust acceptable time to answer
 plot_annotation_times(
     curated_df,
-    title='Annotation duration times below average reaction time',
-    f_name='annotation_duration_below_average_reaction_time',
+    title='Annotation duration times above average reaction time',
+    f_name='annotation_duration_above_average_reaction_time',
 )
 
 # respective number of results produced by individual annotators
