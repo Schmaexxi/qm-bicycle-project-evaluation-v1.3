@@ -14,11 +14,11 @@ Navigate into the cloned repo and create a directory labeled 'data', which shoul
 
 ### Dependencies
 Make sure to run Python3.9 to be able to replicate this setup effortlessly.
-
-Pip did cause some problems due to versioning when I tried setting it up, so I recommend using conda.
 #### Pip
 ```
-pip install -r requirements.txt
+python -m venv bicycle_project_eval
+source bicycle_project_eval/bin/activate
+pip install -r requirements.txt 
 ```
 
 #### Conda
