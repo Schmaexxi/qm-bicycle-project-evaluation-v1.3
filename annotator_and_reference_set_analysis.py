@@ -28,7 +28,7 @@ def plot_annotation_times(
     fig.suptitle(f'{title}')
     ax1.boxplot(df['task_output_duration_ms'], showfliers=False, notch=True)
     ax1.get_xaxis().set_visible(False)
-    ax1.set_title('Box plot for all annotator times')
+    ax1.set_title('Box plot for all annotation durations')
     ax1.set_ylabel('Time in ms')
     # use index values for x-axis (annotators)
     ax2.scatter([index for index in list(df.index.get_level_values(0))], df['task_output_duration_ms'], s=1)
@@ -157,7 +157,7 @@ answer_counts_by_question: pandas.Series = annotator_df.groupby('question')['tas
 controversial_questions: List = []
 for index, count in answer_counts_by_question.items():
     # do annotators vote 'yes' nearly as often as 'no' - adjust this range to define the term "highly disagree"
-    if count in range(4, 6):
+    if count in range(4, 7):
         if index[0] not in controversial_questions:
             controversial_questions.append(index[0])
 
