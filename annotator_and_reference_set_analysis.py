@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker as ticker  # type: ignore
 from pathlib import Path
 
-PLOT_PATH: Path = Path.cwd() / 'plots'
-DATA_PATH: Path = Path.cwd() / 'data'
+PLOT_PATH: Path = Path(__file__).resolve().parent / 'plots'
+DATA_PATH: Path = Path(__file__).resolve().parent / 'data'
 PLOT_PATH.mkdir(exist_ok=True, parents=True)
 DATA_PATH.mkdir(exist_ok=True, parents=True)
 
