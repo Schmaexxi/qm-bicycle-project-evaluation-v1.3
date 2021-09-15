@@ -9,7 +9,8 @@ class TestFileStructure(unittest.TestCase):
         """
         Loads a json-file and assigns a nested dictionary accessed by the keys "['results']['root_node']['results']"
         """
-        path_to_data: Path = Path.cwd().parent / 'data/anonymized_project.json'
+        cur_path: Path = Path(__file__).resolve()
+        path_to_data: Path = cur_path.parent.parent / 'data/anonymized_project.json'
         with open(path_to_data, 'r') as file:
             data: dict = json.load(file)
         self.result_set: dict = data['results']['root_node']['results']
