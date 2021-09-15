@@ -56,6 +56,9 @@ def plot_annotator_results(
     fig = plt.figure(figsize=(8, 6), dpi=300)
     annotator_result_count: dict = annotator_results['annotator_result_count']
     plt.bar(annotator_result_count.keys(), annotator_result_count.values(), color='#a1ccf4')
+    plt.title(f'{title}')
+    plt.xlabel('Annotator')
+    plt.ylabel('Number of annotations')
     current_axes = plt.gca()
     current_axes.axes.get_xaxis().set_major_locator(ticker.MultipleLocator(1))  # show every annotator on the x-axis
     current_axes.axes.get_xaxis().set_ticks(list(annotator_result_count.keys()))  # set ticks only for annotators
@@ -64,9 +67,9 @@ def plot_annotator_results(
         for idx, tick_label in enumerate(
             current_axes.get_xaxis().get_ticklabels()
         ):  # color tick labels for special annotators
-            if idx - 1 in bad_annotators:
+            if idx + 1 in task_results['bad_annotators']:
                 tick_label.set_color('red')
-            elif idx - 1 in good_annotators:
+            elif idx + 1 in task_results['good_annotators']:
                 tick_label.set_color('green')
         ax2 = plt.twinx()  # axis for accuracies
 
@@ -77,15 +80,12 @@ def plot_annotator_results(
         )
         ax2.plot(
             annotator_result_count.keys(),
-            annotator_results['stats']['expected_accuracies'],
-            label='Expected accuracies',
+            annotator_results['stats']['adjusted_accuracies'],
+            label='Normalized accuracies',
         )
         ax2.set_ylabel('Percentage')
         ax2.legend(bbox_to_anchor=(1, 1.1), loc=1, borderaxespad=0)
 
-    plt.title(f'{title}')
-    plt.xlabel('Annotator')
-    plt.ylabel('Number of annotations')
     fig.savefig(PLOT_PATH / f'{f_name}.png')
 
 
@@ -293,8 +293,8 @@ for idx, tick_label in enumerate(current_axes.get_xaxis().get_ticklabels()):  # 
         tick_label.set_color('red')
 
 plt.xlabel('Annotators')
-plt.ylabel('Time: MM-DD-HH')
-plt.title('Annotator times')
+plt.ylabel('Time: MM-DD HH')
+plt.title('Annotation times')
 fig.savefig(PLOT_PATH / 'annotation_times.png')
 
 
@@ -338,7 +338,7 @@ annotator_df.sort_index(inplace=True)  # sort numerically by annotator
 get_annotator_statistics_from_df(annotator_df, task_results)
 
 # expected accuracy through random chance based on data frequency
-task_results['stats']['expected_accuracies'] = [
+task_results['stats']['adjusted_accuracies'] = [
     norm_accuracy_by_data_freq(
         acc, [images_with_bicycles_count / images_count, images_without_bicycles_count / images_count]
     )
@@ -355,5 +355,8 @@ for idx, acc in enumerate(task_results['stats']['accuracies']):
         task_results['stats']['accuracies']
     ):  # bad annotators
         bad_annotators.append(idx + 1)
+
+task_results['good_annotators'] = good_annotators  # list of annotator numbers
+task_results['bad_annotators'] = bad_annotators  # list of annotator numbers
 
 plot_annotator_results(task_results, title='Annotator Evaluation', f_name='annotator_evaluation')
