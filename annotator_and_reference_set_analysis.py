@@ -19,9 +19,9 @@ def plot_annotation_times(
 ) -> None:
     """
     Plots a figure with a box plot and scatter plot for a column 'task_output_duration_ms'
-    :param df: dataframe
-    :param title: title for plot
-    :param f_name: file_name to use
+    :param df: dataframe from input data
+    :param title: plot title
+    :param f_name: file_name
     """
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6), dpi=300)
     plt.subplots_adjust(wspace=0.3)
@@ -31,12 +31,61 @@ def plot_annotation_times(
     ax1.set_title('Box plot for all annotation durations')
     ax1.set_ylabel('Time in ms')
     # use index values for x-axis (annotators)
-    ax2.scatter([index for index in list(df.index.get_level_values(0))], df['task_output_duration_ms'], s=1)
+    ax2.scatter([df.index.get_level_values(0)], df['task_output_duration_ms'], s=1)
     ax2.xaxis.set_major_locator(ticker.MultipleLocator(1))  # show every annotator on the x-axis
+    annotators: List[int] = list(set(list(df.index.get_level_values(0))))
+    ax2.xaxis.set_ticks(annotators)  # set ticks only for annotators
     ax2.set_title('Annotation duration by annotator')
     ax2.set_xlabel('Annotator')
     ax2.set_ylabel('Time in ms')
     ax2.tick_params(axis='x', labelsize=8)
+    fig.savefig(PLOT_PATH / f'{f_name}.png')
+
+
+def plot_annotator_results(
+    annotator_results: dict, title: str = 'Annotations by annotator', f_name: str = 'annotator_results'
+) -> None:
+    """
+    Plots a bar graph for annotator activity and optional annotator accuracy curves
+    :param annotator_results: dictionary to access plot data from
+    :param title: plot title
+    :param f_name: file_name
+    :return:
+    """
+    # plot annotator results
+    fig = plt.figure(figsize=(8, 6), dpi=300)
+    annotator_result_count: dict = annotator_results['annotator_result_count']
+    plt.bar(annotator_result_count.keys(), annotator_result_count.values(), color='#a1ccf4')
+    current_axes = plt.gca()
+    current_axes.axes.get_xaxis().set_major_locator(ticker.MultipleLocator(1))  # show every annotator on the x-axis
+    current_axes.axes.get_xaxis().set_ticks(list(annotator_result_count.keys()))  # set ticks only for annotators
+
+    if annotator_results.get('stats'):
+        for idx, tick_label in enumerate(
+            current_axes.get_xaxis().get_ticklabels()
+        ):  # color tick labels for special annotators
+            if idx - 1 in bad_annotators:
+                tick_label.set_color('red')
+            elif idx - 1 in good_annotators:
+                tick_label.set_color('green')
+        ax2 = plt.twinx()  # axis for accuracies
+
+        ax2.plot(
+            annotator_result_count.keys(),
+            annotator_results['stats']['accuracies'],
+            label='Accuracies',
+        )
+        ax2.plot(
+            annotator_result_count.keys(),
+            annotator_results['stats']['expected_accuracies'],
+            label='Expected accuracies',
+        )
+        ax2.set_ylabel('Percentage')
+        ax2.legend(bbox_to_anchor=(1, 1.1), loc=1, borderaxespad=0)
+
+    plt.title(f'{title}')
+    plt.xlabel('Annotator')
+    plt.ylabel('Number of annotations')
     fig.savefig(PLOT_PATH / f'{f_name}.png')
 
 
@@ -45,6 +94,52 @@ def percentage(part: float, whole: float) -> float:
     Helper function to calculate percentages
     """
     return part * 100 / whole
+
+
+def get_annotator_statistics_from_df(df: pd.DataFrame, result_dict: dict) -> None:
+    """
+    Computes statistics for annotators of a given data frame
+    :param df: Data frame with an index of denoting annotators and the columns 'validation' and 'task_output_answer'
+    :param result_dict: the dictionary to add the statistics to
+    """
+    annotator_stats: dict = {
+        annotator: {} for annotator in set(list(annotator_df.index))
+    }  # one dictionary per annotator
+    annotators: List[int] = list(set(list(df.index)))
+
+    for annotator in annotators:
+        # get columns validation and task_output_answer for the current annotator to evaluate their accuracy
+        cur_annotator_df: pd.DataFrame = df.loc[annotator][['validation', 'task_output_answer']]
+        true_positive: int = len(
+            cur_annotator_df[
+                ((cur_annotator_df['task_output_answer'] == 'yes') & (cur_annotator_df['validation'] == 1))
+            ]
+        )
+        true_negative: int = len(
+            cur_annotator_df[((cur_annotator_df['task_output_answer'] == 'no') & (cur_annotator_df['validation'] == 0))]
+        )
+        false_positive: int = len(
+            cur_annotator_df[
+                ((cur_annotator_df['task_output_answer'] == 'yes') & (cur_annotator_df['validation'] == 0))
+            ]
+        )
+        false_negative: int = len(
+            cur_annotator_df[((cur_annotator_df['task_output_answer'] == 'no') & (cur_annotator_df['validation'] == 1))]
+        )
+        correct_predictions: int = true_positive + true_negative
+        wrong_predictions: int = false_positive + false_negative
+
+        annotator_stats[annotator]['correct_predictions'] = correct_predictions
+        annotator_stats[annotator]['wrong_predictions'] = wrong_predictions
+        annotator_stats[annotator]['accuracy'] = correct_predictions / (correct_predictions + wrong_predictions)
+        annotator_stats[annotator]['precision'] = true_positive / (true_positive + false_positive)
+        annotator_stats[annotator]['recall'] = true_positive / (true_positive + false_negative)
+
+    result_dict['stats'] = {}
+    # assign stats for all annotators
+    result_dict['stats']['accuracies'] = [annotator_stats[annotator]['accuracy'] for annotator in annotators]
+    result_dict['stats']['precisions'] = [annotator_stats[annotator]['precision'] for annotator in annotators]
+    result_dict['stats']['recalls'] = [annotator_stats[annotator]['recall'] for annotator in annotators]
 
 
 def norm_accuracy_by_data_freq(acc: float, data_frequencies: List[float]) -> float:
@@ -64,6 +159,8 @@ result_set: dict = data['results']['root_node']['results']
 
 task_results: dict = {}
 
+
+# --------> DATA FRAME BUILDING
 # keys for dictionary access; tuple-elements at index > 0 are keys for nested dicts
 column_names: List = [
     ('task_input', 'image_url'),
@@ -118,11 +215,14 @@ annotator_df['task_input_image_url'] = [
 annotator_df.set_index('user_id', inplace=True)
 annotator_df.sort_index(inplace=True)
 
-annotator_count: int = len(set(list(annotator_df.index.get_level_values(0))))  # number of distinct annotators
+# <--------- DATA FRAME BUILDING
+
+annotators: List[int] = list(set(list(annotator_df.index.get_level_values(0))))  # distinct annotators
 
 task_results['max_annotation_duration'] = annotator_df['task_output_duration_ms'].max()  # maximum annotation duration
 task_results['min_annotation_duration'] = annotator_df['task_output_duration_ms'].min()  # minimum annotation duration
 task_results['mean_annotation_duration'] = annotator_df['task_output_duration_ms'].mean()  # average annotation duration
+
 plot_annotation_times(annotator_df)
 
 curated_df: pd.DataFrame = annotator_df[(annotator_df['task_output_duration_ms'] > 0)]  # remove negative outlier
@@ -138,19 +238,10 @@ plot_annotation_times(
 )
 
 # respective number of results produced by individual annotators
-task_results['annotator_result_count'] = {
-    index: len(annotator_df.loc[index]) for index in set(list(annotator_df.index.get_level_values(0)))
-}
+task_results['annotator_result_count'] = {index: len(annotator_df.loc[index]) for index in annotators}
 
-# plot annotator results
-fig = plt.figure(figsize=(8, 6), dpi=300)
-plt.bar(task_results['annotator_result_count'].keys(), task_results['annotator_result_count'].values(), color='#a1ccf4')
-current_axes = plt.gca()
-current_axes.axes.get_xaxis().set_major_locator(ticker.MultipleLocator(1))  # show every annotator on the x-axis
-plt.title('Annotations by annotator')
-plt.xlabel('Annotator')
-plt.ylabel('Number of annotations')
-fig.savefig(PLOT_PATH / 'annotator_results.png')
+# plot annotator_results
+plot_annotator_results(task_results)
 
 answer_counts_by_question: pandas.Series = annotator_df.groupby('question')['task_output_answer'].value_counts()
 
@@ -163,6 +254,7 @@ for index, count in answer_counts_by_question.items():
 
 task_results['controversial_questions'] = controversial_questions
 
+
 # task 2
 # number of responses of 'cant_solve' and 'corrupt_data' respectively
 task_results['cant_solve_count'] = len(annotator_df[(annotator_df['task_output_cant_solve'] == 1)])
@@ -172,6 +264,38 @@ task_results['corrupt_data_count'] = len(annotator_df[(annotator_df['task_output
 unsolvable_and_corrupted_df: pd.DataFrame = annotator_df[
     (annotator_df['task_output_corrupt_data'] == 1) | (annotator_df['task_output_cant_solve'] == 1)
 ]
+
+annotators_with_unusual_options: List[int] = [
+    annotator for annotator in set(list(unsolvable_and_corrupted_df.index.get_level_values(0)))
+]  # get indices of the desired annotators
+
+unusual_annotators_df: pd.DataFrame = annotator_df.loc[
+    annotators_with_unusual_options
+]  # select only rows of the desired annotators
+
+annotator_df['created_at'] = pd.to_datetime(annotator_df['created_at'])  # cast column with datetimes to datetime-type
+annotator_df.sort_values(['user_vendor_user_id', 'created_at'], ascending=[True, True], inplace=True)
+
+# plot annotation times
+fig = plt.figure(figsize=(8, 6), dpi=300)
+for annotator in set(list(annotator_df.index)):
+    plt.scatter(
+        [annotator for _ in range(len(annotator_df.loc[annotator]['created_at']))],
+        annotator_df.loc[annotator]['created_at'],
+        s=0.5,
+    )
+current_axes = plt.gca()
+current_axes.axes.get_xaxis().set_major_locator(ticker.MultipleLocator(1))  # show every annotator on the x-axis
+current_axes.axes.get_xaxis().set_ticks(annotators)  # set ticks only for annotators
+
+for idx, tick_label in enumerate(current_axes.get_xaxis().get_ticklabels()):  # color tick labels for special annotators
+    if idx + 1 in annotators_with_unusual_options:
+        tick_label.set_color('red')
+
+plt.xlabel('Annotators')
+plt.ylabel('Time: MM-DD-HH')
+plt.title('Annotator times')
+fig.savefig(PLOT_PATH / 'annotation_times.png')
 
 
 # task 3
@@ -209,74 +333,27 @@ annotator_df = pd.merge(annotator_df, references_df, on='task_input_image_url') 
 annotator_df.set_index('index_copy', inplace=True)  # recreate original index
 annotator_df.sort_index(inplace=True)  # sort numerically by annotator
 
-annotator_stats: dict = {annotator: {} for annotator in set(list(annotator_df.index))}  # one dictionary per annotator
 
-for annotator in set(list(annotator_df.index)):
-    # get columns validation and task_output_answer for the current annotator to evaluate their accuracy
-    cur_annotator_df: pd.DataFrame = annotator_df.loc[annotator][['validation', 'task_output_answer']]
-    true_positive: int = len(
-        cur_annotator_df[((cur_annotator_df['task_output_answer'] == 'yes') & (cur_annotator_df['validation'] == 1))]
-    )
-    true_negative: int = len(
-        cur_annotator_df[((cur_annotator_df['task_output_answer'] == 'no') & (cur_annotator_df['validation'] == 0))]
-    )
-    false_positive: int = len(
-        cur_annotator_df[((cur_annotator_df['task_output_answer'] == 'yes') & (cur_annotator_df['validation'] == 0))]
-    )
-    false_negative: int = len(
-        cur_annotator_df[((cur_annotator_df['task_output_answer'] == 'no') & (cur_annotator_df['validation'] == 1))]
-    )
-    correct_predictions: int = true_positive + true_negative
-    wrong_predictions: int = false_positive + false_negative
-
-    annotator_stats[annotator]['correct_predictions'] = correct_predictions
-    annotator_stats[annotator]['wrong_predictions'] = wrong_predictions
-    annotator_stats[annotator]['accuracy'] = correct_predictions / (correct_predictions + wrong_predictions)
-    annotator_stats[annotator]['precision'] = true_positive / (true_positive + false_positive)
-    annotator_stats[annotator]['recall'] = true_positive / (true_positive + false_negative)
-
-# prepare data to plot
-labels = list(set(list(annotator_df.index)))
-accuracies = [annotator_stats[annotator]['accuracy'] for annotator in labels]
-precisions = [annotator_stats[annotator]['precision'] for annotator in labels]
-recalls = [annotator_stats[annotator]['recall'] for annotator in labels]
-
-task_results['accuracies'] = accuracies
-task_results['precisions'] = precisions
-task_results['recalls'] = recalls
+# compute annotator accuracies
+get_annotator_statistics_from_df(annotator_df, task_results)
 
 # expected accuracy through random chance based on data frequency
-expected_accuracies = [
+task_results['stats']['expected_accuracies'] = [
     norm_accuracy_by_data_freq(
         acc, [images_with_bicycles_count / images_count, images_without_bicycles_count / images_count]
     )
-    for acc in accuracies
+    for acc in task_results['stats']['accuracies']
 ]
 
 good_annotators: List[int] = []
 bad_annotators: List[int] = []
 
-for idx, acc in enumerate(accuracies):
-    if acc > np.mean(accuracies):  # good annotators
+for idx, acc in enumerate(task_results['stats']['accuracies']):
+    if acc > np.mean(task_results['stats']['accuracies']):  # good annotators
         good_annotators.append(idx + 1)
-    elif acc < np.mean(accuracies) - np.std(accuracies):  # bad annotators
+    elif acc < np.mean(task_results['stats']['accuracies']) - np.std(
+        task_results['stats']['accuracies']
+    ):  # bad annotators
         bad_annotators.append(idx + 1)
 
-fig = plt.figure(figsize=(8, 6), dpi=300)
-plt.bar(labels, task_results['annotator_result_count'].values(), label='#Answered questions', color='#a1ccf4')
-plt.xlabel('Annotator')
-plt.ylabel('Answered Questions')
-plt.title('Annotator Evaluation')
-current_axes = plt.gca()
-current_axes.axes.get_xaxis().set_major_locator(ticker.MultipleLocator(1))  # show every annotator on the x-axis
-for idx, tick_label in enumerate(current_axes.get_xaxis().get_ticklabels()):  # color tick labels for special annotators
-    if idx - 1 in bad_annotators:
-        tick_label.set_color('red')
-    elif idx - 1 in good_annotators:
-        tick_label.set_color('green')
-ax2 = plt.twinx()
-ax2.plot(labels, accuracies, label='Accuracy')
-ax2.plot(labels, expected_accuracies, label='Normalized accuracy')
-ax2.set_ylabel('Percentage')
-ax2.legend(bbox_to_anchor=(1, 1.1), loc=1, borderaxespad=0)
-fig.savefig(PLOT_PATH / 'annotator_evaluation.png')
+plot_annotator_results(task_results, title='Annotator Evaluation', f_name='annotator_evaluation')
